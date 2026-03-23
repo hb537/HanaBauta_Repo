@@ -1,0 +1,430 @@
+---
+title: "VTPEH 6270 - Checkpoint 04"
+author: "Hana Bauta"
+date: "`r Sys.Date()`"
+editor_options:
+  chunk_output_type: console
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 1
+    number_sections: true
+    latex_engine: xelatex
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Introduction
+
+This report will continue the exploration of technology engagement and mental health outcomes among educators using secondary survey data from the mWEL R21 study conducted by the NYU Langone Department of Population Health. Building on prior checkpoints, this document focuses on data simulation in the context of power analysis.
+
+```{r packages}
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(knitr)
+library(readr)
+library(psych)
+library(ggpubr)
+```
+
+```{r load-data}
+setwd("~/Desktop/R_Lab/Checkpoint_4")
+mwel_data <- read_csv("APEX_Data.csv")
+codebook  <- read_csv("APEX_Data_Codebook.csv")
+```
+
+# Objective and Approach
+## Specific Objective
+
+**RQ** Is higher technology engagement associated with lower anxiety symptom severity among educators in the mWEL R21 study?
+
+Understanding whether tech familiarity relates to anxiety is relevant to mWEL program's digital delivery model: if more tech-engaged educators report lower anxiety, this supports the feasibility of digital wellness interventions in this population.
+
+## Data Description
+
+```{r var-table, results='asis'}
+var_table <- data.frame(
+  Variable = c("tech_score", "GAD7_Sum1"),
+  Label = c(
+    "Technology Engagement Score",
+    "Anxiety Severity"
+  ),
+  Variable_Type = c("Continuous", "Continuous"),
+  R_Class = c("numeric", "integer"),
+  Scale = c(
+    "Mean of 7 items scored 1-6",
+    "Total score 0-21"
+  ),
+  stringsAsFactors = FALSE
+)
+
+knitr::kable(
+  var_table,
+  col.names = c("Variable Name", "Label", "Variable Type", "R Class", "Scale / Range"),
+  caption = "Key variables used in this analysis",
+  booktabs = TRUE
+)
+```
+
+*Variable A (exposure): tech_score*
+A composite score calculated as the mean of the seven technology engagement items (tech_1 through tech_7). Each item measures how frequently participants engage in a specific tech-related activity, such as smartphone use, social media or general web browsing. This is on a 1-6 Likert scale (1 = not at all, 6 = every day). Higher scores represent greater overall technology engagement.
+
+*Variable B (outcome): GAD7_Sum1* 
+This represents anxiety symptom severity and is calculated as the total score of the seven GAD-7 questionnaire items. Each item is scored from 0–3, producing a total possible score ranging from 0 to 21. The higher scores indicate greater levels of anxiety. Additionally, the categories for interpretation include minimal (0–4), mild (5–9), moderate (10–14), and severe anxiety (15–21).
+
+## Data Preparation
+
+```{r data-prep, results='hide'}
+
+# Computing the composite tech engagement score (mean of 7 items)
+mwel_data <- mwel_data %>%
+  mutate(
+    tech_score = rowMeans(
+      select(., tech_1, tech_2, tech_3, tech_4, tech_5, tech_6, tech_7),
+      na.rm = TRUE
+    )
+  )
+# Choosing the key variables and filtering
+analysis_data <- mwel_data %>%
+  select(pid, tech_score, GAD7_Sum1, gender, age) %>% 
+  filter(!is.na(tech_score) & !is.na(GAD7_Sum1))
+cat("Complete cases:", nrow(analysis_data), "\n")
+summary(analysis_data[, c("tech_score", "GAD7_Sum1")])
+
+# Created tech engagement tertile subcategories
+analysis_data <- analysis_data %>%
+  mutate(
+    tech_tertile = ntile(tech_score, 3),
+    tech_group   = factor(
+      tech_tertile,
+      levels = 1:3,
+      labels = c("Low Tech\nEngagement",
+                 "Moderate Tech\nEngagement",
+                 "High Tech\nEngagement")
+    )
+    )
+```
+
+I removed the rows with missing values on the key variables and the participants with complete data were retained. The composite tech_score was computed as the mean of the 7 technology use items, while retaining participants with partial item responses. I also created new tech engagment tertile sub-categories for visualization. 
+
+## Data Visualization
+
+```{r visualization, fig.width = 9, fig.height = 4}
+
+# Plot 1: A Scatter plot with a regression line
+p1 <- ggplot(analysis_data, aes(x = tech_score, y = GAD7_Sum1)) +
+  geom_jitter(alpha = 0.4, width = 0.05, color = "#2c7bb6") +
+  geom_smooth(method = "lm", se = TRUE, color = "#d7191c") +
+  labs(
+    title    = "Technology Engagement vs. Anxiety Severity",
+    subtitle = "Linear fit with 95% confidence interval",
+    x        = "Technology Engagement Score (mean of 7 items, 1-6)",
+    y        = "GAD-7 Total Score (0-21)"
+  ) +
+  theme_classic(base_size = 11)
+
+# Plot 2: A Boxplot by the technology tertile
+p2 <- ggplot(analysis_data,
+             aes(x = tech_group, y = GAD7_Sum1, fill = tech_group)) +
+  geom_boxplot(alpha = 0.75, outlier.shape = 21) +
+  scale_fill_manual(values = c(
+    "Low Tech\nEngagement"      = "#d7191c",
+    "Moderate Tech\nEngagement" = "#fdae61",
+    "High Tech\nEngagement"     = "#1a9641"
+  )) +
+  labs(
+    title = "GAD-7 Anxiety Score by Technology Engagement Tertile",
+    x     = "Technology Engagement Level",
+    y     = "GAD-7 Total Score (0-21)"
+  ) +
+  theme_classic(base_size = 11) +
+  theme(legend.position = "none")
+
+ggarrange(p1, p2, ncol = 2)
+```
+
+## Description of Plausible Relationships
+
+Based on visual inspection of the scatter plot, there appears to be a modest negative linear association between technology engagement and anxiety severity. As the composite technology engagement score increases from 1 to 6, GAD-7 scores tend to decrease slightly. The fitted regression line has a negative slope -- although there is considerable dispersion around the line -- indicating that the tech engagement explains only a limited proportion of the anxiety score variation.
+
+The boxplot which is stratified by technology engagement tertiles also supports this pattern. The median GAD-7 score appears somewhat higher in the low technology engagement group compared with the moderate engagement group. However, the distributions overlap across groups, suggesting that the differences between groups is modest. 
+
+Overall, these two visual patterns are consistent with a very weak negative association between technology engagement and anxiety. The variability and high noise within groups indicates that additional factors (i.e age, education level, occupational stress) likely contribute to these anxiety levels.
+
+## Parameters of Interest
+
+```{r param-table, results='asis'}
+param_table <- data.frame(
+  Parameter   = c("Intercept", "Slope (effect size)", "Residual SD (noise)", "Sample size"),
+  Symbol      = c("b0", "b1", "sigma", "n"),
+  Description = c(
+    "Expected GAD-7 score when tech score = 0",
+    "Change in GAD-7 per 1-unit increase in tech score; negative = inverse association",
+    "SD of residuals; reflects unexplained variability in anxiety",
+    "Number of educators in the analysis"
+  ),
+  Estimate = c("~10", "~-0.5 to -1.5", "~4 to 5", "~150"),
+  stringsAsFactors = FALSE
+)
+
+knitr::kable(param_table,
+  col.names = c("Parameter", "Symbol", "Description", "Estimated Value"),
+  caption   = "Parameters of interest for the simulated linear relationship",
+  booktabs  = TRUE
+)
+```
+
+Because the visualizations suggest a modest negative linear association between technology engagement and anxiety severity, the simulation focuses on the parameters of a simple linear model. The key parameters are the intercept, the slope as the effect size, the residual standard deviation (SD) representing noise and the sample size (n).
+
+# Simulation
+## Simulation Basis
+
+```{r, results='hide'}
+# Observed reference values from the real data
+obs_n <- nrow(analysis_data)
+obs_mean_tech <- mean(analysis_data$tech_score)
+obs_sd_tech <- sd(analysis_data$tech_score)
+
+# linear model fit
+obs_lm <- lm(GAD7_Sum1 ~ tech_score, data = analysis_data)
+
+obs_b0 <- coef(obs_lm)[1]
+obs_b1 <- coef(obs_lm)[2]
+obs_sigma <- sigma(obs_lm)
+
+# the observed reference parameters
+obs_n
+obs_mean_tech
+obs_sd_tech
+obs_b0
+obs_b1
+obs_sigma
+
+# Simulating one plausible dataset
+set.seed(123)
+
+sim_n <- obs_n
+sim_b0 <- obs_b0
+sim_b1 <- obs_b1
+sim_sigma <- obs_sigma
+
+sim_data <- tibble(
+  tech_score = rnorm(sim_n, mean = obs_mean_tech, sd = obs_sd_tech)
+) %>%
+  mutate(
+    tech_score = pmin(pmax(tech_score, 1), 6),
+    GAD7_Sum1 = sim_b0 + sim_b1 * tech_score + rnorm(sim_n, mean = 0, sd = sim_sigma),
+    GAD7_Sum1 = pmin(pmax(round(GAD7_Sum1), 0), 21)
+  )
+sim_data
+```
+
+To simulate a plausible dataset, I first fit a linear regression model to the real data to extract three reference parameters: the intercept (b0), the slope (b1) and the residual standard deviation (sigma) -- which describe the observed relationship between tech engagement and anxiety in the real sample. I then generated a simulated dataset of the same size as the real data (n = 198). 
+
+## Simulation Output
+
+```{r sim-output, results='asis'}
+# Techn engagement tertiles created in simulated data
+sim_data <- sim_data %>%
+  mutate(
+    tech_tertile = ntile(tech_score, 3),
+    tech_group   = factor(
+      tech_tertile,
+      levels = 1:3,
+      labels = c("Low", "Moderate", "High")
+    )
+  )
+# Summary statistics stratified by tech engagement tertile
+sim_summary <- sim_data %>%
+  group_by(tech_group) %>%
+  summarise(
+    n           = n(),
+    mean_gad7   = round(mean(GAD7_Sum1), 2),
+    median_gad7 = round(median(GAD7_Sum1), 2),
+    sd_gad7     = round(sd(GAD7_Sum1), 2),
+    q25_gad7    = round(quantile(GAD7_Sum1, 0.25), 2),
+    q75_gad7    = round(quantile(GAD7_Sum1, 0.75), 2),
+    .groups     = "drop"
+  )
+
+knitr::kable(
+  sim_summary,
+  col.names = c("Tech Engagement Group", "N", "Mean GAD-7",
+                "Median GAD-7", "SD", "Q25", "Q75"),
+  caption   = "Simulated GAD-7 summary statistics stratified by tech engagement tertile",
+  booktabs  = TRUE
+)
+```
+
+The summary statistics show a negative gradient across tertiles: mean GAD-7 scores decrease from the Low to the High technology engagement group, which is consistent with the negative slope assumed in the simulation.
+
+## Simulation Function
+
+```{r, results='hide'}
+
+# b1: slope (change in GAD-7 per unit tech increase)
+# sigma: SD
+# n: number of obs
+run_simulation <- function(effect_size, 
+                           noise,        
+                           sample_size,  
+                           b0    = obs_b0,
+                           mean_x = obs_mean_tech,
+                           sd_x   = obs_sd_tech) {
+  # Tech scores [1, 6]
+  tech <- rnorm(sample_size, mean = mean_x, sd = sd_x)
+  tech <- pmin(pmax(tech, 1), 6)
+  
+  # GAD-7 outcome [0, 21]
+  gad7 <- b0 + effect_size * tech + rnorm(sample_size, mean = 0, sd = noise)
+  gad7 <- pmin(pmax(round(gad7), 0), 21)
+  
+  sim_df <- tibble(tech_score = tech, GAD7_Sum1 = gad7)
+  
+  # Fit linear model and key stats
+  fit        <- lm(GAD7_Sum1 ~ tech_score, data = sim_df)
+  fit_sum    <- summary(fit)
+  
+  est_b1     <- coef(fit)["tech_score"]
+  p_val      <- coef(fit_sum)["tech_score", "Pr(>|t|)"]
+  significant <- p_val < 0.05
+  
+  # Simulated data and summary statistics
+  list(
+    data = sim_df,
+    stats = tibble(
+      effect_size = effect_size,
+      noise       = noise,
+      sample_size = sample_size,
+      est_b1      = est_b1,
+      p_value     = p_val,
+      significant = significant
+    )
+  )
+}
+#test
+set.seed(42)
+test_run <- run_simulation(effect_size = obs_b1, noise = obs_sigma, sample_size = obs_n)
+test_run$stats
+```
+
+## Simulation Automation
+
+```{r}
+set.seed(2024)
+
+# parameters
+effect_sizes <- seq(-2.0, -0.2, length.out = 10)   
+
+# 10 effect sizes (b1)
+sample_sizes <- c(30, 50, 75, 100, 125, 150, 175, 200, 300, 500)  
+
+# 10 sample sizes
+noise_levels <- c(3, obs_sigma, 7)                  
+
+# 3 noise levels: low, observed, high
+
+# Grid
+param_grid <- expand.grid(
+  effect_size = effect_sizes,
+  sample_size = sample_sizes,
+  noise       = noise_levels
+)
+cat("Total simulation runs:", nrow(param_grid), "\n")
+
+# Simulations
+sim_results <- vector("list", nrow(param_grid))
+
+for (i in seq_len(nrow(param_grid))) {
+  sim_results[[i]] <- run_simulation(
+    effect_size = param_grid$effect_size[i],
+    noise       = param_grid$noise[i],
+    sample_size = param_grid$sample_size[i]
+  )
+}
+
+# Summary statistics into single data frame
+sim_stats <- bind_rows(lapply(sim_results, function(x) x$stats))
+
+# Labelling the noise levels for the plotting
+sim_stats <- sim_stats %>%
+  mutate(
+    noise_label = factor(
+      round(noise, 2),
+      levels = round(sort(unique(noise)), 2),
+      labels = c("Low Noise (SD = 3)",
+                 paste0("Observed Noise (SD = ", round(obs_sigma, 1), ")"),
+                 "High Noise (SD = 7)")
+    )
+  )
+# the results
+knitr::kable(
+  head(sim_stats, 12),
+  digits  = c(2, 2, 0, 2, 4, NA, NA),
+  col.names = c("Effect Size", "Noise (SD)", "Sample Size",
+                "Est. Slope", "p-value", "Significant", "Noise Level"),
+  caption = "First 12 simulation runs with summary statistics",
+  booktabs = TRUE
+)
+```
+
+# Visualization
+
+```{r sim-visualization, fig.width = 10, fig.height = 7}
+
+# Compute power for each parameter combo
+power_summary <- sim_stats %>%
+  group_by(effect_size, sample_size, noise_label) %>%
+  summarise(
+    power      = mean(significant),
+    mean_est   = mean(est_b1),
+    .groups    = "drop"
+  )
+
+# Heatmap: stat power across effect sizes & sample sizes by noise level
+ggplot(power_summary,
+       aes(x = factor(round(effect_size, 2)),
+           y = factor(sample_size),
+           fill = power)) +
+  geom_tile(color = "white", linewidth = 0.4) +
+  geom_text(aes(label = round(power, 2)), size = 2.8, color = "black") +
+  scale_fill_gradient2(
+    low      = "#d73027",
+    mid      = "#ffffbf",
+    high     = "#1a9641",
+    midpoint = 0.5,
+    limits   = c(0, 1),
+    name     = "Power\n(Prop. sig.)"
+  ) +
+  facet_wrap(~ noise_label, ncol = 3) +
+  labs(
+    title    = "Simulation Power: Proportion of Significant Results",
+    subtitle = "Across 10 effect sizes × 10 sample sizes × 3 noise levels",
+    x        = "Effect Size (slope b1)",
+    y        = "Sample Size (n)"
+  ) +
+  theme_classic(base_size = 10) +
+  theme(
+    axis.text.x  = element_text(angle = 45, hjust = 1),
+    strip.text   = element_text(face = "bold"),
+    legend.position = "right"
+  )
+
+```
+
+# Interpretation
+
+These simulations examined how three parameters — effect size (slope b1), sample size (n), and residual noise (sigma) --influence the probability of detecting a negative association between technology engagement and anxiety severity. The heatmap shows a clear and expected pattern: statistical power increases as the effect size becomes more negative (meaning the true association is stronger) and as the sample size increases.
+
+When the effect size is close to zero (for example b1 = −0.2), the power remains low across all sample sizes and noise levels. This means that even with a large sample, the analysis would rarely produce a statistically significant result if the true relationship between the variables is very weak. In contrast, when the negative effect size becomes larger (for example b1 ≤ −1.5), statistical power increases quickly and can reach 0.80 or higher with relatively moderate sample sizes.
+
+Residual noise also has an important impact. Under lower noise conditions (SD = 3), the sample size needed to achieve adequate power (≥ 0.80) is much smaller than under higher noise conditions (SD = 7). This highlights how additional variability in the data — potentially driven by factors such as occupational stress, age, or baseline well-being — can make it more difficult to detect a real association.
+
+Applying these findings to the mWEL data, the observed effect size (b1 ≈ −0.7 to −1.0) falls within a range of moderate statistical power when the sample size is around 150 participants and noise is at an observed level. This suggests the study is reasonably powered to detect the hypothesized relationship, although a somewhat larger sample could further reduce the risk of statistical error. Future studies that include additional covariates — such as occupational stress, age, or baseline well-being — may also help reduce residual noise and improve the efficiency of the analysis without necessarily requiring a larger sample size.
+
+# AI Use Disclosure Statement
+
+I used Claude during the analysis process to help determine appropriate statistical approaches and to assist with refining codes in chunks, generation of publication-ready graphs, and fixing the tables for visualization. Claude was particularly helpful in reasoning through appropriate analytical methods given that the primary variables of interest were continuous. I also used ChatGPT primarily to debug R code, troubleshoot data preparation steps, and resolve issues related to R Markdown compilation and formatting.

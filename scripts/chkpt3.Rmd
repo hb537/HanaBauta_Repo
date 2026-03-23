@@ -1,0 +1,255 @@
+---
+title: "Check Point #03 - Dataset Exploration"
+author: "Hana Bauta"
+date: "`r Sys.Date()`"
+editor_options:
+  chunk_output_type: console
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 1
+    number_sections: true
+    latex_engine: xelatex
+urlcolor: blue
+bibliography: references.bib
+---
+
+```{r setup, include = FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+```
+
+# Introduction
+
+This checkpoint will explore patterns in technology engagement among educators using secondary survey data.
+
+```{r, results='hide'}
+
+#Loading Data and Packages
+setwd("~/Desktop/R_Lab/APEX Data")
+
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(knitr)
+library(readr)
+library(psych)
+library(ggpubr)
+
+mwel_data <- read_csv("mWEL_R21_Data.csv")
+codebook <- read_csv("mWEL_R21_Data_Deictionary.csv")
+
+```
+
+## Research Question and Background
+
+***RQ:*** Does average technology engagement differ across age groups among educators?
+
+Variable A (Outcome): Technology engagement (mean of tech_1–tech_7)
+Variable B (Grouping Variable): Age group (<25, 25–34, 35–44, 45–54, 55+)
+
+***Scientific Plausibility and Context:*** Technology engagement is an important prerequisite for benefiting from digital tools and digital wellness interventions. Research on digital inequality suggests that technology use and digital skills vary by age cohort, and that older adults are not a uniform group in their technology routines or competence (@friemel2016; @hargittai2017). These age related differences are important for implementation because engagement is a common barrier to digital intervention success -- even effective tools may have limited impact if users do not adopt them consistently or find them burdensome to use (@borghouts2021). Based on this literature it is plausible that technology engagement will differ across age groups among educators, with younger groups showing higher average engagement than older groups.
+
+# Data Preparation
+
+Two transformations were needed to support the research question. First, a composite technology engagement score (tech_usage_avg) was created by averaging the seven variables ('tech_1–tech_7'). This will provide a more stable measure of overall engagement than relying on any single technology-use item.
+
+Age (a continuous variable) was also categorized into five age groups (<25, 25–34, 35–44, 45–54, 55+) to allow for stratified descriptive analysis, tables and visual comparisons. This also allows for the variable to be categorical.
+
+```{r, results='hide'}
+
+# Derived Variable: tech_usage_avg 
+# Categorized Variable: age_group
+
+analysis_df <- mwel_data %>%
+  select(age, tech_1:tech_7)
+
+analysis_df <- analysis_df %>%
+  mutate(
+    age_numeric = as.numeric(age),
+
+    tech_usage_avg = rowMeans(select(., tech_1:tech_7), na.rm = TRUE),
+
+    age_group = cut(
+      age_numeric,
+      breaks = c(-Inf, 24, 34, 44, 54, Inf),
+      labels = c("<25", "25–34", "35–44", "45–54", "55+")
+    )
+  ) %>%
+  filter(!is.na(age_group), !is.na(tech_usage_avg))
+
+names(analysis_df)
+
+table(analysis_df$age_group)
+
+```
+
+# Grouped Summary Statistics
+
+This table summarizes technology engagement (mean of tech_1–tech_7) stratified by age group.
+
+```{r, echo=FALSE}
+
+# Stratified Descriptive Statistics
+
+tech_summary <- analysis_df %>%
+  group_by(age_group) %>%
+  summarise(
+    n = n(),
+    mean = mean(tech_usage_avg, na.rm = TRUE),
+    sd = sd(tech_usage_avg, na.rm = TRUE),
+    median = median(tech_usage_avg, na.rm = TRUE),
+    IQR = IQR(tech_usage_avg, na.rm = TRUE),
+    min = min(tech_usage_avg, na.rm = TRUE),
+    max = max(tech_usage_avg, na.rm = TRUE)
+  )
+
+knitr::kable(
+  tech_summary,
+  digits = 2,
+  caption = "Descriptive statistics of technology engagement
+  (tech_1–tech_7 mean) stratified by age group"
+)
+
+```
+**Interpretation:** Technology engagement varies across age groups in this sample. The 25–34 age group demonstrated the highest mean engagement (M = 3.80, SD = 1.11), while the 55+ group showed the lowest (M = 2.91, SD = 1.33). Median values reflect a similar pattern, with the 25–34 group reporting the highest median (4.00) and the 55+ group reporting the lowest (3.00). 
+
+The range of engagement scores spans from 1 to approximately 5.7 across all groups -- indicating that both low and high levels of engagement are present within each cohort. However, variability (IQR) is larger among the midlife groups (35–44 and 45–54) suggesting a greater heterogeneous technology engagement within these age categories. 
+
+Overall, these stratified descriptive statistics suggest a potential age gradient in technology engagement, with younger educators --particularly those aged 25–34 --demonstrating higher average engagement than older educators. These patterns are consistent with the theoretical expectations regarding age-related differences in digital engagement and adoption readiness.
+
+# Comparative Visualizations
+
+```{r, results='hide'}
+
+# Color-Coding
+
+nature_theme <- theme_classic(base_size = 10, base_family = "Helvetica") +
+  theme(
+    axis.title       = element_text(size = 9),
+    axis.text        = element_text(size = 8, colour = "black"),
+    legend.position  = "none",
+    plot.title       = element_text(size = 10, face = "bold"),
+    plot.subtitle    = element_text(size = 8, colour = "grey40"),
+    strip.background = element_blank(),
+    strip.text       = element_text(size = 9),
+    panel.border     = element_blank(),
+    axis.line        = element_line(colour = "black", linewidth = 0.4)
+  )
+
+age_colours <- c("<25"   = "#4E79A7",
+                 "25–34" = "#59A14F",
+                 "35–44" = "#F28E2B",
+                 "45–54" = "#E15759",
+                 "55+"   = "#B07AA1")
+
+# Visualization 1: Box Plot
+p1 <- ggplot(analysis_df, aes(x = age_group, y = tech_usage_avg, fill = age_group)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6, width = 0.5, colour = "grey30", linewidth = 0.4) +
+  geom_jitter(aes(colour = age_group), width = 0.15, size = 1, alpha = 0.5) +
+  scale_fill_manual(values   = age_colours) +
+  scale_colour_manual(values = age_colours) +
+  coord_cartesian(ylim = c(1, 7)) +
+scale_y_continuous(breaks = 1:7)+
+  labs(
+    title    = "Technology Engagement by Age Group",
+    subtitle = "Composite score (mean of tech_1–tech_7; scale 1–7)",
+    x        = "Age Group",
+    y        = "Technology Engagement (mean score)"
+  ) +
+  nature_theme
+
+p1
+
+# Visualization 2: Violin Plot
+
+summary_df <- analysis_df %>%
+  group_by(age_group) %>%
+  summarise(
+    mean = mean(tech_usage_avg, na.rm = TRUE),
+    se   = sd(tech_usage_avg,   na.rm = TRUE) / sqrt(n()),
+    .groups = "drop"
+  )
+
+p2 <- ggplot(analysis_df, aes(x = age_group, y = tech_usage_avg, fill = age_group)) +
+  geom_violin(trim = TRUE, alpha = 0.5, colour = NA) +
+  geom_pointrange(
+    data = summary_df,
+    aes(y = mean, ymin = mean - se, ymax = mean + se),
+    colour = "black", size = 0.5, linewidth = 0.6
+  ) +
+  scale_fill_manual(values = age_colours) +
+  scale_y_continuous(limits = c(1, 7), breaks = 1:7) +
+  labs(
+    title    = "Distribution of Technology Engagement by Age Group",
+    subtitle = "Violin plot; point = mean ± SE",
+    x        = "Age Group",
+    y        = "Technology Engagement (mean score)"
+  ) +
+  nature_theme
+
+p2
+
+# Visualization 3 – Mean ± 95 % CI bar chart
+
+# CI dataframe
+ci_df <- analysis_df %>%
+  group_by(age_group) %>%
+  summarise(
+    n    = n(),
+    mean = mean(tech_usage_avg, na.rm = TRUE),
+    sd   = sd(tech_usage_avg,   na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    se  = sd / sqrt(n),
+    ci  = qt(0.975, df = n - 1) * se,
+    ylo = mean - ci,
+    yhi = mean + ci,
+    label_y = yhi + 0.15
+  )
+
+p3 <- ggplot(ci_df, aes(x = age_group, y = mean, fill = age_group)) +
+  geom_col(alpha = 0.75, width = 0.6, colour = "grey30", linewidth = 0.4) +
+  geom_errorbar(aes(ymin = ylo, ymax = yhi), width = 0.2, linewidth = 0.5) +
+  geom_text(aes(y = label_y, label = paste0("n = ", n)),
+            size = 2.5, colour = "grey30") +
+  scale_fill_manual(values = age_colours) +
+  scale_y_continuous(limits = c(0, 7), breaks = 0:7, expand = expansion(mult = c(0, 0.05))) +
+  labs(
+    title    = "Mean Technology Engagement by Age Group",
+    subtitle = "Error bars represent 95% confidence intervals",
+    x        = "Age Group",
+    y        = "Mean Technology Engagement Score"
+  ) +
+  nature_theme
+
+p3
+
+#Saving Visualization #1 as PDF
+
+ggsave(
+  filename = "Figure1_TechEngagement_Boxplot.pdf",
+  plot     = p1,
+  width    = 6.5,
+  height   = 4.5,
+  units    = "in",
+)
+
+```
+
+**Interpretation:**
+
+***Visualization 1:*** The box plot demonstrates clear differences in the distribution of technology engagement across age groups. The 25–34 group shows the highest median engagement and a more concentrated interquartile range (IQR) indicating consistently high engagement within this cohort. In contrast, the 55+ group shows a lower median and wider dispersion toward lower scores, suggesting reduced overall engagement. The midlife groups (35–44 and 45–54) exhibit high variability, with both high and low engagement scores present. This heterogeneity suggests that age alone does not fully determine technology engagement, but younger cohorts (particularly 25–34) appear to demonstrate consistently higher use.
+
+***Visualization 2:*** The violin plot again illustrates distributional differences by age group. The density of scores for the 25–34 group is concentrated toward higher engagement values (approximately 4–5), whereas the 55+ group displays greater density at lower engagement levels. The mean ± SE markers reinforce the descriptive pattern that average engagement declines gradually across increasing age groups. However, the overlap in distributions indicates that while age trends are apparent, the engagement levels vary within each cohort.
+
+***Visualization 3:*** The bar plot with 95% confidence intervals highlights differences in average engagement more directly. The 25–34 group demonstrates the highest mean score, while the 55+ group shows the lowest. Although confidence intervals overlap across several adjacent groups, the overall pattern suggests a downward gradient in engagement with increasing age. The narrow confidence interval for the 25–34 group reflects both a larger sample size and more consistent engagement in that cohort.
+
+***Overview:***
+These visualizations together provide evidence that technology engagement differs across age groups in this sample, with younger educators -- particularly those aged 25–34 -- demonstrating higher average engagement than older educators. These findings align with the theoretical expectations from the digital inequality literature and have relevance for tailoring digital intervention strategies across age cohorts.
+
+
+# AI Use Disclosure Statement
+Yes, I used Claude to assist with drafting the RMarkdown file/knitting errors and debugging the R code. I primarily focused on using it to develop ggplot visualizations, pdf conversions, and subsetting assistence. The outputs were all reviewed and edited by me to be adjusted to the Apex dataset that I am working with.
