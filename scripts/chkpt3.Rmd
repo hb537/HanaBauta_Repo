@@ -228,7 +228,7 @@ p3
 #Saving Visualization #1 as PDF
 
 ggsave(
-  filename = "Figure1_TechEngagement_Boxplot.pdf",
+  filename = "../outputs/figures/Figure1_TechEngagement_Boxplot.pdf",
   plot     = p1,
   width    = 6.5,
   height   = 4.5,
