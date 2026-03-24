@@ -11,7 +11,7 @@ output:
     number_sections: true
     latex_engine: xelatex
 urlcolor: blue
-bibliography: "../references.bib"
+# bibliography: "../references.bib"
 ---
 
 ```{r setup, include = FALSE}
