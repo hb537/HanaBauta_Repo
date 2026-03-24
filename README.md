@@ -24,10 +24,10 @@ How do patterns of technology and AI engagement correlate with social-emotional 
 
 ## Project Structure
 - `data/raw/` → Original datasets (Note: mWEL data is de-identified).
-- `data/processed/` → Cleaned data files and merged subsets for comparative analysis.
-- `scripts/` → R and RMarkdown scripts for data wrangling, data analysis and simulations.
-- `outputs/figures/` → Comparative visualizations (e.g., Tech use vs. Anxiety scores).
-- `outputs/reports/` → Final analysis summaries and Checkpoint submissions.
+- `data/processed/` → subsets for comparative analysis
+- `scripts/` → RMarkdown file scripts for data wrangling, data analysis and simulations.
+- `outputs/figures/` → Visualizations generated from the analysis (e.g., Tech use vs. Anxiety scores).
+- `outputs/reports/` → Final knitted PDF reports and interpretation summaries.
 
 ## Methods
 * **Statistical Analysis**: Utilizing R to identify correlations between tech engagement and mental health indicators.
