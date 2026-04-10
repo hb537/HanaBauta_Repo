@@ -1,0 +1,280 @@
+---
+title: "VTPEH 6270 - Checkpoint 06"
+subtitle: "Statistical Analyses"
+author: "Hana Bauta"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    latex_engine: xelatex
+urlcolor: blue
+bibliography: bib_chkpt_6.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+knitr::opts_chunk$set(fig.path = "../outputs/figures/")
+library(tidyverse)
+library(ggpubr)
+library(knitr)
+```
+
+# Introduction
+
+## Research Question
+
+Is higher daily technology (internet/social media) engagement associated with higher anxiety symptom severity among US college students?
+
+- **Variable A (Exposure):** Daily internet and social media use ('internet_1'), an ordinal scale from 1 (None) to 8 (10+ hours/day).
+- **Variable B (Outcome):** Anxiety symptom severity measured by the GAD-7 total score ('anx_score'; range 0–21).
+  
+## Scientific Plausibility and Context
+
+Building on previous frameworks, this analysis shifts focus from the localized mWEL educator pilot in Uganda to a broad US national student survey. While prior mWEL data checkpoints explored technology engagement as a professional resource-- potentially buffering anxiety in educators through streamlined communication --excessive tech use among college students may have a counterproductive effect, exacerbating anxiety and poorer mental health outcomes.
+
+The association between higher daily technology use and increased anxiety among U.S. college students is supported by multiple psychological and behavioral mechanisms. Prior research shows that greater screen time is linked to poorer mental health outcomes, including depressive and anxiety symptoms. For example, @twenge2018 found that increased engagement with digital media was associated with higher levels of psychological distress among adolescents, a pattern that likely extends to college-aged populations. One explanation is that frequent social media use increases exposure to social comparison, fear of missing out (FOMO), and constant peer evaluation, all of which can heighten anxiety [@masrizada2025; @twenge2018]. Consistent with this, @vannucci2017 found that more frequent social media use was associated with higher anxiety levels in emerging adults.
+
+Additionally, excessive technology use may contribute to anxiety through cognitive and physiological pathways. A systematic review by @karim2020 found consistent links between problematic social media use and anxiety, emphasizing that both the amount and type of engagement matter. More recent work highlights the concept of “digital overload”, where constant exposure to online content overwhelms individuals’ cognitive capacity and increases stress responses [@tafesse2024]. Together, these findings provide strong scientific support for the hypothesis that higher daily internet and social media use is associated with greater anxiety symptom severity among college students.
+
+# Material & Methods
+
+## Data
+
+The data for this checkpoint comes from the *Healthy Minds Study (HMS) 2024–2025* national dataset, which is an open-source survey focused on the mental health of adolescent and young adult students across US colleges and universities. Participants are recruited through stratified random sampling of enrolled students and data are collected via online questionnaire. The processed subset used in this checkpoint (hms_processed_subset.csv) contains 84,736 observations with key mental health, technology use and demographic variables. After removing cases missing on either 'internet_1' or 'anx_score', the analysis sample for the models is N = 34,953.
+
+Derived variable: 'tech_engagement_level' is a numeric version of the 8-point ordinal internet/social media use item (treated as continuous for regression analysis). The GAD-7 score ('anx_score') is the unmodified sum of the seven items (0–21). Additionally, the 'gender_female' indicator is coded 1 for female respondents and 'NA' for all others (male, non-binary, prefer not to say). Therefore, the regression will retain only female respondents, and models where respondents with complete age data (N = 23,464; all female-coded) are reported.
+
+```{r title}
+
+hms_data <- read_csv("../data/processed/hms_processed_subset.csv")
+
+# --- Data Preparation ---
+    # internet_1: 1=None, 2=<1hr, 3=1–2hr, 4=2–3hr, 5=3–4hr, 6=4–6hr, 7=6–9hr, 8=10+hr
+analysis_data <- hms_data %>%
+  filter(!is.na(internet_1), !is.na(anx_score)) %>%
+  mutate(
+    tech_engagement_level = as.numeric(internet_1),
+    usage_cat = factor(internet_1,
+                       levels = 1:8,
+                       labels = c("None", "<1hr", "1–2hr", "2–3hr",
+                                  "3–4hr", "4–6hr", "6–9hr", "10+hr"))
+  )
+
+cat("Analysis N:", nrow(analysis_data))
+```
+
+## Statistical Analyses
+
+1. *Descriptive statistics* — First, I will calculate the means, SDs, and medians of GAD-7 by usage category.
+
+2. *Assumption checks* — Second, I will follow through with an inspection of the linearity and residual normality (using
+   diagnostic plots). The Shapiro-Wilk is not appropriate in this case since N > 5,000 due to high sensitivity.
+
+3. *Bivariate tests* — Third, the Pearson correlation and simple linear regression of 'anx_score' on 'tech_engagement_level' will be analyzed.
+   
+4. *Multivariable linear regression* — Lastly, age will be added as a covariate for linear regression testing.
+   
+```{r descriptive-stats}
+desc_table <- analysis_data %>%
+  group_by(usage_cat) %>%
+  summarise(
+    n       = n(),
+    Mean    = round(mean(anx_score, na.rm = TRUE), 2),
+    SD      = round(sd(anx_score, na.rm = TRUE), 2),
+    Median  = round(median(anx_score, na.rm = TRUE), 1),
+    .groups = "drop"
+  )
+
+knitr::kable(
+  desc_table,
+  col.names = c("Daily Usage", "n", "Mean GAD-7", "SD", "Median GAD-7"),
+  caption   = "Descriptive statistics of GAD-7 anxiety scores by daily internet/social media use category (HMS 2024–25).",
+  booktabs  = TRUE
+)
+```
+
+
+```{r assumption-checks, fig.height=4, fig.width=8, fig.cap="Regression diagnostic plots for the simple linear model. Left: residuals vs fitted values (linearity/homoscedasticity). Right: Q-Q plot of residuals (approximate normality)."}
+# Fit simple model first for diagnostics
+simple_model <- lm(anx_score ~ tech_engagement_level, data = analysis_data)
+
+par(mfrow = c(1, 2))
+plot(simple_model, which = 1, main = "Residuals vs Fitted")
+plot(simple_model, which = 2, main = "Normal Q-Q")
+par(mfrow = c(1, 1))
+```
+*Descriptive Interpretation:* As shown in Table 1 and Figure 1, mean GAD-7 scores increase monotonically across usage categories -- from 6.30 (SD = 6.10) among non-users to 9.36 (SD = 6.22) among those reporting 10+ hours/day. This is with a difference of more than 3 points on the 0–21 scale.
+
+## Code: GitHub Repository
+
+The data, codebook, code, subset scripts, and this RMarkdown file can be found at:
+[https://github.com/hb537/HanaBauta_Repo.git]
+
+# Results
+
+## Visualization
+
+```{r boxplot, fig.height=5, fig.width=8, fig.cap="GAD-7 anxiety scores by daily internet and social media usage category (HMS 2024–25; N = 34,953). Boxes show IQR and median; whiskers extend to 1.5 × IQR. A monotonic increase in anxiety severity with usage is visible across all categories."}
+ggplot(analysis_data, aes(x = usage_cat, y = anx_score, fill = usage_cat)) +
+  geom_boxplot(outlier.alpha = 0.05, outlier.size = 0.5) +
+  scale_fill_viridis_d(option = "mako", guide = "none") +
+  stat_summary(fun = mean, geom = "point", shape = 18, size = 2.5,
+               color = "white", show.legend = FALSE) +
+  labs(
+    title    = "Anxiety Severity by Daily Internet/Social Media Use",
+    subtitle = "Healthy Minds Study 2024–25 (N = 34,953); diamond = group mean",
+    x        = "Daily Usage (Hours)",
+    y        = "GAD-7 Anxiety Score (0–21)"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r scatter, fig.height=4.5, fig.width=6, fig.cap="Scatter plot with linear regression line (95% CI shading) for the continuous tech engagement level (1–8) and GAD-7 score. The positive slope confirms a monotonic trend."}
+ggplot(analysis_data,
+       aes(x = tech_engagement_level, y = anx_score)) +
+  geom_jitter(alpha = 0.05, width = 0.25, size = 0.6, color = "#3B528BFF") +
+  geom_smooth(method = "lm", se = TRUE, color = "#FDE725FF", linewidth = 1.2) +
+  scale_x_continuous(breaks = 1:8,
+                     labels = c("None","<1hr","1–2hr","2–3hr",
+                                "3–4hr","4–6hr","6–9hr","10+hr")) +
+  labs(
+    title    = "Tech Engagement vs. Anxiety Severity",
+    subtitle = "Linear fit with 95% confidence interval",
+    x        = "Daily Internet/Social Media Use (ordered category)",
+    y        = "GAD-7 Anxiety Score (0–21)"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(axis.text.x = element_text(angle = 35, hjust = 1))
+```
+
+## Statistical Analysis
+
+```{r correlation-table}
+# Perform Pearson correlation
+cor_result <- cor.test(analysis_data$tech_engagement_level, 
+                       analysis_data$anx_score)
+
+# Create a summary data frame for the table
+cor_summary <- data.frame(
+  Metric = c("Pearson's Correlation (r)", 
+             "p-value", 
+             "95% CI Lower Bound", 
+             "95% CI Upper Bound",
+             "Degrees of Freedom"),
+  Value = c(round(cor_result$estimate, 3),
+            format.pval(cor_result$p.value, eps = 0.001),
+            round(cor_result$conf.int[1], 3),
+            round(cor_result$conf.int[2], 3),
+            format(cor_result$parameter, big.mark=","))
+)
+
+# Present as a knitr table
+knitr::kable(
+  cor_summary,
+  caption = "Pearson Correlation Analysis: Technology Engagement vs. Anxiety Score",
+  col.names = c("Metric", "Value"),
+  booktabs = TRUE
+)
+```
+
+*Correlation Interpretation:* The Pearson correlation between tech engagement level and GAD-7 score was r = 0.157 (95% CI [0.147, 0.168]; p < 0.001), indicating a small but statistically significant positive association.
+
+```{r regression-table}
+# Extracting simple model summary
+simple_summary <- summary(simple_model)
+simple_coeffs <- as.data.frame(simple_summary$coefficients)
+simple_confint <- confint(simple_model)
+
+# Create consistent data frame
+simple_df <- data.frame(
+  Predictor = c("Intercept", "Tech Engagement Level"),
+  b         = simple_coeffs[,1],
+  SE        = simple_coeffs[,2],
+  t         = simple_coeffs[,3],
+  p         = simple_coeffs[,4],
+  CI_low    = simple_confint[,1],
+  CI_high   = simple_confint[,2]
+)
+
+# Format p-values
+simple_df$p <- ifelse(simple_df$p < 0.001, "< .001", round(simple_df$p, 3))
+
+# Present as a knitr table
+knitr::kable(
+  simple_df,
+  col.names = c("Predictor", "b", "SE", "t", "p", "95% CI Low", "95% CI High"),
+  digits = c(0, 3, 3, 2, 0, 3, 3),
+  caption = paste0("Simple Linear Regression: GAD-7 anxiety score predicted by tech engagement level (N = ", 
+                   format(nrow(analysis_data), big.mark=","), ")."),
+  booktabs = TRUE,
+  row.names = FALSE
+)
+
+```
+
+```{r multivariable-regression-table}
+# 1. Filter for complete cases and restrict to female respondents (gender_female == 1)
+multi_data <- hms_data %>%
+  filter(!is.na(internet_1), 
+         !is.na(anx_score), 
+         !is.na(age),
+         gender_female == 1) %>%
+  mutate(tech_engagement_level = as.numeric(internet_1))
+
+# 2. Run the multivariable model
+multi_model <- lm(anx_score ~ tech_engagement_level + age, data = multi_data)
+multi_summary <- summary(multi_model)
+multi_coeffs <- multi_summary$coefficients
+multi_confint <- confint(multi_model)
+
+# 3. Combine into a clean data frame for the table
+res_df <- data.frame(
+  Predictor = c("Intercept", "Tech Engagement Level", "Age"),
+  b         = multi_coeffs[,1],
+  SE        = multi_coeffs[,2],
+  t         = multi_coeffs[,3],
+  p         = multi_coeffs[,4],
+  CI_low    = multi_confint[,1],
+  CI_high   = multi_confint[,2]
+)
+
+# 4. Format p-values
+res_df$p <- ifelse(res_df$p < 0.001, "< .001", round(res_df$p, 3))
+
+# 5. Generate the knitr table
+knitr::kable(
+  res_df,
+  col.names = c("Predictor", "b", "SE", "t", "p", "95% CI Low", "95% CI High"),
+  caption   = paste0("Multivariable linear regression: GAD-7 anxiety score predicted by tech engagement level and age (N = ", 
+                     format(nrow(multi_data), big.mark=","), 
+                     "; R² = ", 
+                     round(multi_summary$adj.r.squared, 3), ")."),
+  digits    = c(0, 3, 3, 2, 0, 3, 3),
+  booktabs  = TRUE,
+  row.names = FALSE
+)
+```
+
+**Interpretations:**
+
+*Assumption checks:* The residuals vs. fitted plot showed approximate homoscedasticity -- confirming the appropriateness of a linear approach. While the Q-Q plot indicated a modest right skew, this is expected for low-clustering GAD-7 scores. Given the very large sample size (N > 34,000), the Central Limit Theorem suggests the sampling distribution of the mean is approximately normal, making the regression estimates robust to the slight skewness.
+
+*Simple regression:* In the un-adjusted model, each unit increase by 1 in tech engagement level (such as moving from "1–2 hours" to "2–3 hours") was associated with a 0.512 point increase in GAD-7 score (b = 0.512, SE = 0.017, t = 29.79, p < .001). This suggests that for every categorical jump in daily usage, anxiety symptoms increase by roughly half a point on the scale.
+
+*Multivariable regression:* After controlling for age (N = 23,464), the association remained statistically significant and nearly unchanged (b = 0.520, SE = 0.022, t = 23.83, p < .001). Interestingly, Age was negatively associated with anxiety (b = −0.040, SE = 0.004, t = −9.14, p < .001), indicating that younger students in the sample reported higher baseline anxiety scores.
+
+# Conclusion
+The results of this analysis support the hypothesis that higher daily technology engagement is associated with increased anxiety symptom severity among US college students.  The monotonic increase observed in Figure 2-- where mean GAD-7 scores rose from 6.30 for non-users to 9.36 for those using tech 10+ hours daily --aligns with the "digital overload" framework described by @tafesse2024. 
+
+These findings contrast with the earlier exploratory analysis of the mWEL educator data, which hypothesized tech as a potential buffer for stress.  Instead, in this student population, the data aligns more closely with the work of @twenge2018 and @vannucci2017 , suggesting that excessive screen time may exacerbate distress through social comparison or FOMO. 
+
+While the association is highly significant (p < .001), the low R^2 (0.033) indicates that technology use is just one of many factors influencing student mental health. Future analysis should incorporate other covariates, such as sleep quality or physical activity, which may influence the relationship between digital engagement and anxiety. Additionally, since the multivariable analysis focused only on female respondents, future work should explore if these patterns hold across all gender identities.
+
+# AI Use Disclosure Statement
+
+I used Gemini to assist with the development of this RMarkdown file. Specifically, the tool helped in the process of subsetting with correct variable mappings from the HMS 2024-2025 codebook. Helped with code structure for the linear regression and ggplot visualizations.
+
+# References 
