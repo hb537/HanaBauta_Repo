@@ -40,4 +40,5 @@ All data utilized from the mWEL study is handled in accordance with the Informed
 This project utilizes AI tools for code optimazation and documentation structure. All academic interpretations and conclusions are the work of the author.
 
 ## Shiny App Link
-https://hbauta.shinyapps.io/outputs/
+[Launch Live App]([https://hbauta.shinyapps.io/outputs/])
+
