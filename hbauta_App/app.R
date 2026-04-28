@@ -14,13 +14,6 @@ suppressPackageStartupMessages({
   library(plotly)
 })
 
-dir.create("data", showWarnings = FALSE)
-file.copy(
-  from = "~/Desktop/HanaBauta_Repo/data/raw/mWEL_Data.csv",
-  to = "data/mWEL_Data.csv",
-  overwrite = TRUE
-)
-
 # ---- Professional color palette ----------------------------
 color_primary <- "#1a3a52"      # Dark navy
 color_secondary <- "#2d5a7b"    # Medium navy
